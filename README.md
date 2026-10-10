@@ -13,7 +13,7 @@
   No Lua interpreter: the cart's Lua ported by hand and proven against the original, every frame, in every room.
 </p>
 
-[![Release][release-shield]][release-url] [![Stars][stars-shield]][stars-url] [![Issues][issues-shield]][issues-url] [![MIT License][license-shield]][license-url]
+[![Stars][stars-shield]][stars-url] [![Issues][issues-shield]][issues-url] [![MIT License][license-shield]][license-url]
 
 [![Platform][platform-shield]][chgame-url] [![Frame rate][fps-shield]](#how-it-works) [![Faithful][trace-shield]](#how-it-was-checked) [![Flash][flash-shield]](#how-it-works) [![RAM][ram-shield]](#how-it-works)
 
@@ -94,8 +94,8 @@ The [CHGame][chgame-url] library and CHGfx; Python for the cart extractors; Lua 
 1. Download the latest release from the
    [Releases](https://github.com/bateske/CHeleste/releases/latest) page.
 2. Pick one:
-   - **The cart**, `Cheleste-<version>.chgame`, for CHGame's SD menu and tools.
-   - **The firmware**: upload it with `chgame upload`, or from the Arduino IDE.
+   - **The cart**, `CHeleste-<version>.chgame`, for CHGame's SD menu and tools.
+   - **The firmware**, `CHeleste-<version>.bin`, to upload over USB without building it.
 3. Pick Celeste Classic from the menu and press A.
 
 To build it yourself, or to regenerate its data from your own copy of the cart, see [BUILDING.md](BUILDING.md).
@@ -155,7 +155,6 @@ Celeste Classic's game design, sprites, map, music and sound effects are Maddy T
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 <!-- MARKDOWN LINKS & IMAGES -->
-[release-shield]: https://img.shields.io/github/v/release/bateske/CHeleste?style=for-the-badge&color=ff77a8
 [release-url]: https://github.com/bateske/CHeleste/releases/latest
 [stars-shield]: https://img.shields.io/github/stars/bateske/CHeleste?style=for-the-badge&color=29adff
 [stars-url]: https://github.com/bateske/CHeleste/stargazers
