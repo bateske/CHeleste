@@ -1,0 +1,127 @@
+# Every level, a picture and the estimated board render time of each.
+cal
+wait 10
+say R 0 0
+wait 45
+snap level00
+perf level00
+say R 1 0
+wait 45
+snap level01
+perf level01
+say R 2 0
+wait 45
+snap level02
+perf level02
+say R 3 0
+wait 45
+snap level03
+perf level03
+say R 4 0
+wait 45
+snap level04
+perf level04
+say R 5 0
+wait 45
+snap level05
+perf level05
+say R 6 0
+wait 45
+snap level06
+perf level06
+say R 7 0
+wait 45
+snap level07
+perf level07
+say R 8 0
+wait 45
+snap level08
+perf level08
+say R 9 0
+wait 45
+snap level09
+perf level09
+say R 10 0
+wait 45
+snap level10
+perf level10
+say R 11 0
+wait 45
+snap level11
+perf level11
+say R 12 0
+wait 45
+snap level12
+perf level12
+say R 13 0
+wait 45
+snap level13
+perf level13
+say R 14 0
+wait 45
+snap level14
+perf level14
+say R 15 0
+wait 45
+snap level15
+perf level15
+say R 16 0
+wait 45
+snap level16
+perf level16
+say R 17 0
+wait 45
+snap level17
+perf level17
+say R 18 0
+wait 45
+snap level18
+perf level18
+say R 19 0
+wait 45
+snap level19
+perf level19
+say R 20 0
+wait 45
+snap level20
+perf level20
+say R 21 0
+wait 45
+snap level21
+perf level21
+say R 22 2
+wait 45
+snap level22
+perf level22
+say R 23 2
+wait 45
+snap level23
+perf level23
+say R 24 2
+wait 45
+snap level24
+perf level24
+say R 25 2
+wait 45
+snap level25
+perf level25
+say R 26 2
+wait 45
+snap level26
+perf level26
+say R 27 2
+wait 45
+snap level27
+perf level27
+say R 28 2
+wait 45
+snap level28
+perf level28
+say R 29 2
+wait 45
+snap level29
+perf level29
+say R 30 2
+wait 45
+snap level30
+perf level30

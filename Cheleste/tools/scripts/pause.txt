@@ -1,0 +1,112 @@
+# The pause menu and the save: playthrough.txt's first two levels, then pause, the menu, TITLE,
+# the title's continue (B) and the saved level again (regenerate if playthrough.txt changes).
+release
+step 30
+hold A
+step 3
+release
+step 104
+hold RIGHT+A
+step 1
+hold RIGHT
+step 2
+hold RIGHT+B
+step 1
+hold RIGHT
+step 10
+hold RIGHT+A
+step 1
+hold RIGHT
+step 2
+hold RIGHT+B
+step 1
+hold RIGHT
+step 11
+hold RIGHT+A
+step 1
+hold RIGHT
+step 6
+hold RIGHT+A
+step 1
+hold RIGHT
+step 4
+hold UP+B
+step 1
+release
+step 3
+hold RIGHT
+step 10
+hold RIGHT+A
+step 1
+hold RIGHT
+step 5
+hold UP+B
+step 1
+release
+step 29
+hold RIGHT+B
+step 1
+hold RIGHT
+step 6
+hold RIGHT+A
+step 1
+hold RIGHT
+step 1
+hold RIGHT+A
+step 1
+hold RIGHT
+step 4
+hold RIGHT+A
+step 1
+hold LEFT
+step 4
+hold LEFT+A
+step 1
+hold RIGHT
+step 4
+hold RIGHT+A
+step 1
+hold LEFT
+step 4
+hold LEFT+A
+step 1
+hold RIGHT
+step 20
+hold RIGHT+UP+B
+step 1
+hold RIGHT
+step 12
+hold RIGHT+A
+step 1
+hold LEFT
+step 4
+hold LEFT+A
+step 1
+hold RIGHT
+step 4
+hold RIGHT+A
+step 1
+release
+step 27
+release
+step 40
+tap START 1
+step 2
+snap paused
+tap DOWN 1
+step 2
+snap restart
+tap UP 1
+tap UP 1
+step 2
+snap title_choice
+tap A 1
+step 30
+snap at_title
+tap B 1
+step 2
+snap continued
+wait 60
+snap level
+wait 60
+snap resumed

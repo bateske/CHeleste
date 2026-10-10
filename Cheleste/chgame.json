@@ -1,0 +1,30 @@
+{
+  "id": "cheleste",
+  "title": "CELESTE CLASSIC",
+  "author": "bateske",
+  "genre": "Platformer",
+  "license": "MIT (code); Celeste Classic's art and sound by Maddy Thorson and Noel Berry",
+  "licenseFiles": [
+    "../LICENSE",
+    "NOTICE"
+  ],
+  "cartImage": "docs/cart.png",
+  "buttons": [
+    {
+      "control": "D-pad",
+      "action": "Run; with B, the dash's direction"
+    },
+    {
+      "control": "A",
+      "action": "Jump, wall-jump"
+    },
+    {
+      "control": "B",
+      "action": "Dash"
+    },
+    {
+      "control": "START",
+      "action": "Pause: continue, restart the room, title"
+    }
+  ]
+}

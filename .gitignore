@@ -1,0 +1,12 @@
+# The original cart: not part of this repository (put your copy here: tools/p8extract.py, tools/ref/)
+/assets/
+
+# build output
+out/
+build/
+Cheleste/out/
+Cheleste/build/
+Cheleste/tools/chsim/build/
+Cheleste/tools/tests/build/
+__pycache__/
+*.pyc

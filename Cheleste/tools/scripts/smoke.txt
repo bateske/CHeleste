@@ -1,0 +1,7 @@
+# Boots to the title, starts the game, and takes pictures of 100 m.
+wait 30
+snap title
+tap A
+wait 120
+snap room1
+perf room1

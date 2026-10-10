@@ -1,0 +1,20 @@
+Cheleste
+Port: Copyright 2026 bateske (MIT, ../LICENSE): the C++ (Game.cpp, Fix.*,
+P8.*, Sounds.*, Save.*, Cheleste.ino) and the tools (tools/, ../tools/).
+
+Celeste Classic, Copyright 2015 Maddy Thorson and Noel Berry: the game
+Game.cpp reproduces, and the data generated from its PICO-8 cart -
+src/assets/Cart.* (sprites, map, sprite flags) and src/audio/Audio.*
+(sound effects and music). The MIT licence above does not cover them.
+
+Reference for the port: NoelFB/Celeste, Source/PICO-8/Classic.cs and
+Emulator.cs (https://github.com/NoelFB/Celeste, MIT, Copyright 2018 Noel
+Berry): the C# version of the same game, read alongside the cart's Lua.
+
+PICO-8's foreach/all/del behaviour follows zepto8's BIOS (Sam Hocevar).
+
+Test routes (not in this repository, downloaded by ../tools/ref/tas.py):
+the Any% TAS of CelesteClassic/ClassicTAS.
+
+CHGame library, simulator and tools (../chgame/): bateske/CHGame, under
+their own licences (../chgame/LICENSE, NOTICE).
