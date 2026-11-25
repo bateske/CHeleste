@@ -17,11 +17,14 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import tempfile
+from typing import Callable
 
-from .image import build_image, trim
+from .chg import board_name
+from .image import boot_image_board, build_image, check_boot_board, trim
 
 
 class WchispNotFound(Exception):
@@ -71,8 +74,15 @@ BOOT_HELP = """no device is in factory ISP mode.
   so pressing it while the board is already running does nothing."""
 
 
-def probe(wchisp: str) -> str:
-    """Confirm a device is in factory ISP mode, and name it.
+SEVERAL_HELP = """wchisp finds {n} devices in factory ISP mode ({names}).
+
+  Provisioning erases and writes the whole chip, and wchisp would pick one of
+  them by itself. Leave only the board to provision in ISP mode (unplug or
+  power off the others) and try again."""
+
+
+def devices_in(output: str) -> list[str]:
+    """The devices `wchisp probe` lists, as it names them ("0: CH32X035G8U6[0x5623]").
 
     Keyed on the POSITIVE signal - a "Device #" line - rather than on error
     wording. wchisp changed "Found 0 devices" to "Found 0 USB devices" between
@@ -80,24 +90,62 @@ def probe(wchisp: str) -> str:
     sailed past this check and surfaced later as a raw wchisp error instead of
     the instruction the user actually needs.
     """
+    return [line.split("Device #", 1)[1].strip() for line in output.splitlines() if "Device #" in line]
+
+
+_UID = re.compile(r"Chip UID:\s*([0-9A-Fa-f]{2}(?:-[0-9A-Fa-f]{2})+)")
+
+
+def uid_in(output: str) -> str | None:
+    """The chip's unique ID in `wchisp info`'s output ("CD-AB-88-D8-60-BE-B5-42",
+    in capitals), or None if it names none."""
+    m = _UID.search(output)
+    return m.group(1).upper() if m else None
+
+
+def probe(wchisp: str) -> str:
+    """Confirm exactly one device is in factory ISP mode, and name it."""
     r = subprocess.run([wchisp, "probe"], capture_output=True, text=True)
-    out = r.stdout + r.stderr
-    for line in out.splitlines():
-        if "Device #" in line:
-            return line.split("Device #", 1)[1].strip()
-    raise RuntimeError(BOOT_HELP)
+    found = devices_in(r.stdout + r.stderr)
+    if not found:
+        raise RuntimeError(BOOT_HELP)
+    if len(found) > 1:
+        raise RuntimeError(SEVERAL_HELP.format(n=len(found), names=", ".join(found)))
+    return found[0]
+
+
+def chip_uid(wchisp: str) -> str | None:
+    """The chip's unique ID as `wchisp info` reports it, or None."""
+    try:
+        r = subprocess.run([wchisp, "info"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return uid_in(r.stdout + r.stderr)
 
 
 def provision(boot_path: pathlib.Path, app_path: pathlib.Path | None = None,
-              wchisp: str | None = None, app_version: int = 0) -> None:
-    tool = find_wchisp(wchisp)
-
+              wchisp: str | None = None, app_version: int = 0, *, device: str | None = None,
+              ask: Callable[[str], bool] | None = None) -> None:
+    """Write the bootloader (and a sketch) through the factory ISP. `device`,
+    the board picked, refuses a bootloader image built for another before
+    anything else (ValueError); the ROM knows nothing of boards, so this
+    catches a wrong image, not a wrong board. `ask`, when given (the
+    standalone provision command; burn never asks), is asked before the chip
+    is erased: no stops with RuntimeError. Mirrors the Go tool's provision."""
     boot = boot_path.read_bytes()
+    try:
+        check_boot_board(boot, device)
+    except ValueError as e:
+        raise ValueError(f"{boot_path}: {e}") from e
     app = app_path.read_bytes() if app_path else None
+    board = board_name(boot_image_board(boot))
 
+    tool = find_wchisp(wchisp)
     print(f"wchisp      : {tool}")
     print(f"device      : {probe(tool)}")
-    print(f"bootloader  : {boot_path.name}  ({len(boot)} bytes)")
+    uid = chip_uid(tool)
+    print(f"chip UID    : {uid}" if uid else "chip UID    : not reported by wchisp")
+    print(f"bootloader  : {boot_path.name}  ({len(boot)} bytes, for {board})")
     if app is not None:
         print(f"application : {app_path.name}  ({len(app)} bytes)")
     else:
@@ -105,6 +153,13 @@ def provision(boot_path: pathlib.Path, app_path: pathlib.Path | None = None,
         print("              enumerate as a COM port, and wait for a normal upload")
 
     image = trim(build_image(boot, app, app_version))
+
+    if ask is not None:
+        print(f"This erases the whole chip and writes a bootloader for {board}.")
+        print("The factory ISP cannot see which board the chip is on: check that it is")
+        print("that board (another board's bootloader drives the wrong pins).")
+        if not ask("erase and write? [y/N] "):
+            raise RuntimeError("not confirmed: nothing was erased (-yes provisions without asking)")
 
     # FULL CHIP ERASE FIRST. wchisp flash erases only the sectors it is about to
     # write. Provisioning a bootloader-only image would leave the previous

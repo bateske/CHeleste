@@ -17,7 +17,7 @@ outlined gradient banner text, a tiny 3×5 font, and (in the CHGame
 repository) a PC simulator that runs your sketch and catches the classic
 tearing bugs.
 
-See [PERFORMANCE.md](../PERFORMANCE.md) for how those numbers were
+See [performance.md](https://github.com/bateske/CHGame/blob/main/docs/performance.md) for how those numbers were
 reached and the full datasheet reasoning.
 
 ## Install
@@ -498,12 +498,34 @@ Override before including `CHGfx.h`, or with `-D` build flags:
 | `CHGFX_DC_PORT` / `_PIN` | `GPIOB`, 0 | |
 | `CHGFX_RST_PORT` / `_PIN` | `GPIOB`, 12 | |
 | `CHGFX_SDCS_PORT` / `_PIN` | `GPIOB`, 11 | Shared-bus SD card, parked high |
+| `CHGFX_BL_PORT` / `_PIN` | unset | Switched backlight, active high (1.3.3) |
 | `CHGFX_NO_SD_PARK` | unset | Define if nothing else shares SPI1 |
 | `CHGFX_ISR_IN_SRAM` | unset | DMA interrupt in SRAM: 4–9% less flush CPU, ~330 B more SRAM |
 
 These are compiled into the library's own files, so they have to be
 build flags (`--build-property build.extra_flags=-DGFX_CHUNK_ROWS=4`
 with `arduino-cli`), not `#define`s in the sketch.
+
+The defaults are the CHGame Rev0 board's. A board variant can set the
+pins itself, and then wins: the **CHGame Rev1** variant sets
+
+| Macro | Rev1 |
+|---|---|
+| `CHGFX_CS_PORT` / `_PIN` | `GPIOA`, 4 |
+| `CHGFX_DC_PORT` / `_PIN` | `GPIOB`, 4 |
+| `CHGFX_RST_PORT` / `_PIN` | `GPIOB`, 12 |
+| `CHGFX_SDCS_PORT` / `_PIN` | `GPIOB`, 3 |
+| `CHGFX_BL_PORT` / `_PIN` | `GPIOB`, 9 |
+
+With a backlight pin (1.3.3), `begin()` holds it low from the start (the
+board's pull-down keeps it off through reset), flushes the framebuffer
+once the panel is set up (black until the sketch draws: every pixel is
+palette index 0, and the default palette's 0 is black; 8.2 ms in 12 bpp),
+and only then drives it high: the panel's power-up noise, and the reset
+and wake-up, are never lit. The flush is the async one the games use, so
+a game pays almost nothing for it; a sketch that only ever calls the
+synchronous `flush()` carries the async path too (0.1–0.5 KB). Rev0 has
+no backlight pin, and its image is unchanged.
 
 SCK and MOSI are **not** configurable: they are SPI1's pins (PA5, PA7),
 and SPI1 is the only peripheral with a DMA path to those lines.
@@ -526,12 +548,13 @@ everything, 13.8 KB. The board leaves a sketch 18 KB, plus 2 KB of stack.
 The SRAM code is placed at the start of `.data`, ahead of the small
 variables the global pointer reaches with one instruction: placed after
 them, it pushes the sketch's variables out of that 4 KB window and every
-access to them grows. See PERFORMANCE.md for how much that mattered.
+access to them grows. See docs/performance.md for how much that mattered.
 
 ### A note about GPIOB pins 8–15
 
 The CH32X035's `CFGHR` register — the pin config for PB8…PB15, which on
-this board is the buttons, the LED, the buzzer, SD_CS and LCD_RST — is
+this board is the buttons, the LED, the buzzer, SD_CS and LCD_RST (on
+Rev1: START, the backlight, the LED, A and LCD_RST) — is
 **write-only**. Reading it back does not return what was written, so the
 vendor GPIO driver keeps a RAM shadow (`CFGHR_tmpB`) and rebuilds the
 whole register from it on every `pinMode()`.

@@ -1,9 +1,12 @@
 /// @file Audio.h
-/// @brief Sound and the status LED: a small sequencer for the piezo.
+/// @brief Sound and the status LED: a small sequencer for the board's
+/// buzzer (a piezo on CHGame Rev0, a magnetic buzzer switched by a MOSFET
+/// on Rev1).
 ///
-/// One pin plays one note at a time, driven by TIM1 channel 2 on PB10 and
-/// stepped by the core's 1 kHz SysTick hook, so no other timer is used. It
-/// plays two kinds of thing at once:
+/// One pin plays one note at a time, driven by TIM1 channel 2 on PB10 (on
+/// CHGame Rev1: TIM2 channel 2 on PA1, a magnetic buzzer) and stepped by the
+/// core's 1 kHz SysTick hook, so no other timer is used. It plays two kinds
+/// of thing at once:
 ///
 ///   - **effects**: short step lists (a pitch, the pitch it sweeps to, a
 ///     length), each with a priority: a new effect is refused while one of
@@ -175,7 +178,7 @@ bool musicPlaying();                // false while sound or music is off
 /// @brief Run the LED patterns: once per logic tick.
 void update();                      // once per logic tick: the LED patterns
 
-/// @brief Status LED (PB9) patterns, for wins. Timed in update() ticks.
+/// @brief Status LED (PB9; PB10 on CHGame Rev1) patterns, for wins. Timed in update() ticks.
 enum Led : uint8_t {
     LED_OFF,        ///< Off.
     LED_BLINK,      ///< One blink (12 ticks).

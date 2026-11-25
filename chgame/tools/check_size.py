@@ -1,9 +1,12 @@
 """Flash and RAM report for a CHGame build, from the linker map.
 
-    chgame size [build/release] [--top 30] [--flash-limit N] [--ram-limit N] [--save-pages N]
+    chgame size [build/<board>/release] [--top 30] [--flash-limit N] [--ram-limit N] [--save-pages N]
 
 (or `python tools/check_size.py BUILDDIR ...`). tools/device.py runs it after
-every build.
+every build. Without BUILDDIR: build/<board>/release in the current folder
+(tools/device.py's build_dir()) for the default board (default_board(), as
+`chgame size`), else the newest board's that is there, else build/release (a
+build from before builds were per board).
 
 The ceiling for statics + heap is 18,416 B (the 2 KB stack is fixed at the
 top of SRAM); this reads _ebss from the map. The image is everything flash
@@ -22,8 +25,30 @@ import re
 import sys
 from pathlib import Path
 
+# One memory map for every board so far: rev0 and rev1 have the same chip
+# (CH32X035G8U6), load address, image limit and save pages (chcart.model.DEVICES),
+# so these limits and the save-page arithmetic below serve them all.
 RAM_LIMIT = 18416
 FLASH_LIMIT = 50944
+
+
+def default_build():
+    """build/<board>/release here: the default board's (what `chgame size`
+    reads) when it exists, else the newest board's that does, else the old
+    build/release, else the default board's (to name in the error)."""
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import device                           # tools/device.py
+    mine = Path("build") / device.default_board() / "release"
+    if mine.is_dir():
+        return str(mine)
+    for b in sorted(device.BOARDS, key=device._rev, reverse=True):
+        if (Path("build") / b / "release").is_dir():
+            return str(Path("build") / b / "release")
+    if Path("build", "release").is_dir():
+        return str(Path("build", "release"))
+    return str(mine)
 
 
 def parse(map_path):
@@ -64,13 +89,14 @@ def parse(map_path):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument("build", nargs="?", default="build/release")
+    ap.add_argument("build", nargs="?", help="the build folder (default build/<board>/release)")
     ap.add_argument("--top", type=int, default=25)
     ap.add_argument("--flash-limit", type=int, default=FLASH_LIMIT)
     ap.add_argument("--ram-limit", type=int, default=RAM_LIMIT)
     ap.add_argument("--symbols", action="store_true")
     ap.add_argument("--save-pages", type=int, default=0, help="fail when fewer save pages are left")
     a = ap.parse_args(argv)
+    a.build = a.build or default_build()
     maps = list(Path(a.build).glob("*.map"))
     if not maps:
         raise SystemExit(f"no .map in {a.build}")

@@ -6,11 +6,21 @@
 // assumes the same). It is also a strict card about N_RC: a command must not
 // start on the byte right after the last byte of a response (some cards,
 // such as a SanDisk 32 GB "SK32G", take it misaligned and stop answering).
-// tests/run_tests.py builds and runs it.
+// tests/run_tests.py builds and runs it twice: for CHGame Rev0 (the card's CS
+// on PB11) and with -DARDUINO_CHGAME_REV1 (on PB3, where PB11 is a button).
 #include <stdio.h>
 #include <string.h>
 #include "Arduino.h"
 #include "SdSpi.h"
+
+// The card's chip select on GPIOB, as SdSpi.cpp picks it for the board.
+#if defined(ARDUINO_CHGAME_REV1)
+#define SD_CS 3
+#define BOARD "rev1"
+#else
+#define SD_CS 11
+#define BOARD "rev0"
+#endif
 
 SpiRegs t_spi;
 GpioRegs t_gpioa, t_gpiob;
@@ -121,7 +131,7 @@ static Card card;
 
 SpiData &SpiData::operator=(uint32_t b) {
     unsigned br = (t_spi.CTLR1 >> 3) & 7;
-    bool csLow = !(t_gpiob.OUTDR & (1u << 11));
+    bool csLow = !(t_gpiob.OUTDR & (1u << SD_CS));
     if (csLow && !(t_gpioa.OUTDR & (1u << 4))) card.conflicts++;   // the panel selected too
     now_us += 1 + (8u << (br + 1)) / 48;                // a byte at 48 MHz / 2^(BR+1)
     last = card.xfer((uint8_t)b, csLow, br);
@@ -136,7 +146,20 @@ static void mcuReset() {
     t_spi = SpiRegs();
     t_spi.CTLR1 = (1u << 2) | (1u << 8) | (1u << 9) | (1u << 6);   // CHGfx's: master, BR 0, enabled
     t_gpioa.OUTDR = 0;                                  // the panel selected
-    t_gpiob.OUTDR = 1u << 11;                           // the card not
+    t_gpiob.OUTDR = 1u << SD_CS;                        // the card not
+    t_gpioa.touched = t_gpiob.touched = 0;
+}
+
+// The driver writes the card's CS and, on GPIOA, the panel's CS (PA4) and
+// MISO's pull-up (PA6), and no other pin: on Rev1 the old CS, PB11, is the
+// A button. It sets no pin's mode on GPIOB (CHGfx made the CS an output).
+static void pinsKept(const char *name) {
+    CHECK(t_gpiob.touched == (1u << SD_CS), "GPIOB pins written %04X, not the card's CS (PB%d) alone",
+          (unsigned)t_gpiob.touched, SD_CS);
+    CHECK(!(t_gpioa.touched & ~((1u << 4) | (1u << 6))), "GPIOA pins written %04X", (unsigned)t_gpioa.touched);
+    CHECK(t_gpiob.CFGLR == 0x44444444 && t_gpiob.CFGHR == 0x44444444, "a GPIOB pin's mode changed");
+    CHECK((t_gpioa.CFGLR & ~(0xFu << 24)) == (0x44444444u & ~(0xFu << 24)),
+          "a GPIOA pin's mode other than PA6's changed");
 }
 
 static void initAndRead(const char *name, bool expectOk) {
@@ -151,6 +174,7 @@ static void initAndRead(const char *name, bool expectOk) {
     CHECK(card.noGap == 0, "%u commands without N_RC", (unsigned)card.noGap);
     CHECK(card.badCrc == 0, "%u commands refused for their CRC", (unsigned)card.badCrc);
     if (!expectOk) {
+        pinsKept(name);
         CHECK(now_us - t0 < 20000, "an empty slot took %u us", (unsigned)(now_us - t0));
         return;
     }
@@ -165,6 +189,7 @@ static void initAndRead(const char *name, bool expectOk) {
         CHECK(r && same, "block %u", (unsigned)lba);
     }
     CHECK(!sd::read(card.blocks, buf), "a block past the end reads");
+    pinsKept(name);
 }
 
 int main() {
@@ -190,6 +215,7 @@ int main() {
     }
     card.insert(Card::NONE);
     initAndRead("no card", false);
-    printf(failures ? "FAILED (%d)\n" : "all %d cases passed\n", failures ? failures : 7);
+    printf(failures ? "FAILED (%d)" : "all %d cases passed", failures ? failures : 7);
+    printf(" (" BOARD ", the card's CS on PB%d)\n", SD_CS);
     return failures ? 1 : 0;
 }

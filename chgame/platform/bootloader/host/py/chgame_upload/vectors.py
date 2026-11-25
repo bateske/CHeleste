@@ -15,6 +15,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
+import shlex
 import struct
 import sys
 from pathlib import Path
@@ -24,6 +26,7 @@ from . import chg as C
 from . import image as I
 from . import layout as L
 from . import protocol as P
+from . import provision as W
 from . import upload as U
 
 SAMPLE_HELLO = bytes([P.ST_OK, 1, P.MODE_BOOTLOADER, 0]) + struct.pack("<HIIHH", 2, L.APP_START, L.APP_MAX_SIZE, 256, 56) \
@@ -77,26 +80,145 @@ def generate() -> dict:
         "layout": L.as_dict(),
         "chg": _chg_cases(),
         "board": _board_cases(),
+        "wchisp": _wchisp_cases(),
+        "platform_txt": _recipe_cases(),
     }
+
+
+# The board package's recipes that run this tool
+# (platform/board/arduino/CHGame/platform.txt), word for word. Both tools
+# must take the command lines Arduino makes of them, so they are part of the
+# vectors: the tests check platform.txt says exactly this and parse the
+# expansions below. Change them here and in platform.txt together.
+RECIPES = {
+    "recipe.hooks.objcopy.postobjcopy.1.pattern":
+        '"{tools.chgame_upload.path}/{tools.chgame_upload.cmd}" pack -device {build.chgame_device} '
+        '"{build.path}/{build.project_name}.bin"',
+    "tools.chgame_upload.upload.pattern":
+        '"{path}/{cmd}" {upload.verbose} -port "{serial.port}" flash -device {build.chgame_device} '
+        '"{build.path}/{build.project_name}.bin" -run',
+    "tools.chgame_upload.bootloader.pattern":
+        '"{path}/{cmd}" {bootloader.verbose} {burn.port} burn -method {burn.method} -device {build.chgame_device} '
+        '-wchisp "{tools.chgame_upload.wchisp}" -bootloader "{runtime.platform.path}/bootloaders/{bootloader.file}"',
+    "tools.chgame_upload.program.pattern":
+        '"{path}/{cmd}" {program.verbose} {burn.port} burn -method {burn.method} -device {build.chgame_device} '
+        '-wchisp "{tools.chgame_upload.wchisp}" -bootloader "{runtime.platform.path}/bootloaders/{bootloader.file}" '
+        '-app "{build.path}/{build.project_name}.bin"',
+}
+# What Arduino puts in for each property (a build folder with a space in it;
+# {burn.port} is the programmer's own text, with a property inside).
+EXPAND = {
+    "tools.chgame_upload.path": "T", "tools.chgame_upload.cmd": "chgame-upload", "path": "T", "cmd": "chgame-upload",
+    "upload.verbose": "-verbose", "bootloader.verbose": "-quiet", "program.verbose": "-quiet",
+    "serial.port": "COM7", "burn.port": '-port "{serial.port}"', "build.path": "B dir", "build.project_name": "X.ino",
+    "build.chgame_device": "rev1", "tools.chgame_upload.wchisp": "W/wchisp.exe", "runtime.platform.path": "P",
+    "bootloader.file": "CHGame/rev1/chgame_sdboot.bin",
+}
+
+
+def _expand(pattern: str, extra: dict) -> list[str]:
+    """The command line Arduino runs for a recipe (its words, without the program)."""
+    props = {**EXPAND, **extra}
+    while "{" in pattern:
+        pattern = re.sub(r"\{([^{}]+)\}", lambda m: props[m.group(1)], pattern)
+    return shlex.split(pattern)[1:]
+
+
+def _recipe_cases() -> dict:
+    """platform.txt's recipes, and what each tool must make of them: the verb,
+    its file, and the flags (unnamed ones as they are when absent)."""
+    image, boot = "B dir/X.ino.bin", "P/bootloaders/CHGame/rev1/chgame_sdboot.bin"
+    plain = {"port": "", "verbose": False, "quiet": False, "positional": [], "run": False, "device": "",
+             "method": "usb", "wchisp": "", "bootloader": "", "app": ""}
+    cases = []
+    for key, extra, want in (
+            ("recipe.hooks.objcopy.postobjcopy.1.pattern", {},
+             {"cmd": "pack", "positional": [image], "device": "rev1"}),
+            ("tools.chgame_upload.upload.pattern", {},
+             {"cmd": "flash", "port": "COM7", "verbose": True, "positional": [image], "run": True, "device": "rev1"}),
+            ("tools.chgame_upload.bootloader.pattern", {"burn.method": "usb"},
+             {"cmd": "burn", "port": "COM7", "quiet": True, "method": "usb", "device": "rev1",
+              "wchisp": "W/wchisp.exe", "bootloader": boot}),
+            ("tools.chgame_upload.bootloader.pattern", {"burn.method": "isp"},
+             {"cmd": "burn", "port": "COM7", "quiet": True, "method": "isp", "device": "rev1",
+              "wchisp": "W/wchisp.exe", "bootloader": boot}),
+            ("tools.chgame_upload.program.pattern", {"burn.method": "usb"},
+             {"cmd": "burn", "port": "COM7", "quiet": True, "method": "usb", "device": "rev1",
+              "wchisp": "W/wchisp.exe", "bootloader": boot, "app": image}),
+            ("tools.chgame_upload.program.pattern", {"burn.method": "isp"},
+             {"cmd": "burn", "port": "COM7", "quiet": True, "method": "isp", "device": "rev1",
+              "wchisp": "W/wchisp.exe", "bootloader": boot, "app": image})):
+        cases.append({"key": key, "argv": _expand(RECIPES[key], extra), "want": {**plain, **want}})
+    return {"recipes": RECIPES, "default_device": "rev0", "cases": cases}
+
+
+# A board reserved for the tests: none is at present (rev1 was until it was
+# defined), so the reserved path is checked with this one patched in.
+RESERVED_EXAMPLE = ("rev2", 0x32524743)         # "CGR2"
 
 
 def _board_cases() -> dict:
     """Which board: the device table, the names shown, HELLO's board field
-    (absent on rev0; bytes past it ignored) and a bootloader image's board
-    word (0 on rev0)."""
+    (absent on rev0; bytes past it ignored), a bootloader image's board word
+    (0 on rev0), and -device against a bootloader image (burn, provision,
+    selfupdate)."""
     hellos = [SAMPLE_HELLO, SAMPLE_HELLO + struct.pack("<I", C.TARGET_REV1),
               SAMPLE_HELLO + struct.pack("<I", C.TARGET_REV1) + bytes(range(6))]
     boots = {"rev0": bytes(256), "rev1": bytes(0x14) + struct.pack("<I", C.TARGET_REV1) + bytes(236),
-             "short": bytes(0x10)}
+             "short": bytes(0x10),
+             "rev0-explicit": bytes(0x14) + struct.pack("<I", C.TARGET_REV0) + bytes(236),
+             "unknown": bytes(0x14) + struct.pack("<I", 0x12345678) + bytes(236)}
+    checks = []
+    for k, v in boots.items():
+        for d in ("", *C.DEVICES, "rev9"):
+            try:
+                I.check_boot_board(v, d)
+                ok = True
+            except ValueError:
+                ok = False
+            checks.append({"image": k, "device": d, "ok": ok})
+    name, target = RESERVED_EXAMPLE
+    C.RESERVED[name] = target
+    try:
+        reserved = {"device": name, "target": target, "name": C.board_name(target)}
+        try:
+            C.target_of(name)
+            raise AssertionError("a reserved device must be refused")
+        except ValueError as e:
+            assert "reserved" in str(e), e
+    finally:
+        del C.RESERVED[name]
     return {
         "devices": C.DEVICES,
         "reserved": C.RESERVED,
+        "known": C.known_devices(),
         "names": [{"target": t, "name": C.board_name(t)} for t in (C.TARGET_REV0, C.TARGET_REV1, 0x12345678)],
         "hello": [{"payload": p.hex(), "board": P.Hello.parse(p).board, "reported": P.Hello.parse(p).board_reported}
                   for p in hellos],
         "boot_image": [{"name": k, "image": v.hex(), "board": I.boot_image_board(v)} for k, v in boots.items()],
+        "device_check": checks,
+        "reserved_example": reserved,
         "packs": [{"device": d, "header": C.pack(bytes(64), "X", device=d)[:C.HEADER_BYTES].hex()} for d in C.DEVICES],
     }
+
+
+def _wchisp_cases() -> dict:
+    """What provision reads from wchisp: the devices `probe` lists (one is
+    written to, none or several refused) and the chip UID `info` reports."""
+    probes = [
+        "Found 0 USB devices\n",
+        "Found 1 devices\nDevice #0: CH32X035G8U6[0x5623]\n",
+        "14:51:24 [INFO] Found 2 USB devices\n14:51:24 [INFO] Device #0: CH32X035G8U6[0x5623]\n"
+        "14:51:24 [INFO] Device #1: CH32X035G8U6[0x5623]\n",
+    ]
+    infos = [
+        "Chip: CH32X035G8U6[0x5623]\nChip UID: CD-AB-88-D8-60-BE-B5-42\nBTVER(bootloader ver): 02.60\n",
+        "14:51:24 [INFO] Chip: CH32V307VCT6[0x7017] (Code Flash: 256KiB)\n"
+        "14:51:24 [INFO] Chip UID: 30-78-3e-26-3b-38-a9-d6\n",
+        "Error: no device\n",
+    ]
+    return {"probe": [{"output": o, "devices": W.devices_in(o)} for o in probes],
+            "info": [{"output": o, "uid": W.uid_in(o) or ""} for o in infos]}
 
 
 def _chg_cases() -> dict:

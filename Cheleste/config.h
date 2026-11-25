@@ -2,7 +2,7 @@
 // with -D (build.extra_flags), or leaves the defaults.
 #pragma once
 
-#define CHLS_VERSION "1.0"
+#define CHLS_VERSION "1.1"
 
 // num as a double instead of PICO-8's 16.16 (host only: tools/ref/'s traces
 // against the cart's Lua).

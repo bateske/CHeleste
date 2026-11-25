@@ -94,8 +94,8 @@ The [CHGame][chgame-url] library and CHGfx; Python for the cart extractors; Lua 
 1. Download the latest release from the
    [Releases](https://github.com/bateske/CHeleste/releases/latest) page.
 2. Pick one:
-   - **The cart**, `CHeleste-<version>.chgame`, for CHGame's SD menu and tools.
-   - **The firmware**, `CHeleste-<version>.bin`, to upload over USB without building it.
+   - **The cart**, `CHeleste-<version>.chgame`, for CHGame's SD menu and tools. It holds a build for every board (Rev0, and Rev1 / Rev 1.5): the tools and the menu pick the right one.
+   - **The firmware**, `CHeleste-<version>-rev0.bin` or `-rev1.bin`, to upload over USB without building it. Take your board's: Rev 1.5 boards use `rev1`.
 3. Pick Celeste Classic from the menu and press A.
 
 To build it yourself, or to regenerate its data from your own copy of the cart, see [BUILDING.md](BUILDING.md).
@@ -117,7 +117,7 @@ cart's __lua__    ──► (by hand)          ──► Cheleste/Game.cpp   the
 | At a glance | |
 |---|---|
 | Frame rate | the cart's 30 fps; rendering is estimated at 13-19 ms of the 33 ms frame |
-| Flash | 45,448 of 50,432 B (both save pages kept) |
+| Flash | 45,468 (Rev0) / 45,568 (Rev1) of 50,432 B (both save pages kept) |
 | RAM | 17,360 of 18,416 B, plus a 2 KB stack |
 | Data from the cart | 12 KB of sheet and map, about 9 KB of sound |
 | Objects | a fixed pool of 40; the busiest room uses 25 |
@@ -165,7 +165,7 @@ Celeste Classic's game design, sprites, map, music and sound effects are Maddy T
 [platform-shield]: https://img.shields.io/badge/platform-CHGame%20handheld-7e2553?style=for-the-badge
 [fps-shield]: https://img.shields.io/badge/the%20cart's-30%20fps-7e2553?style=for-the-badge
 [trace-shield]: https://img.shields.io/badge/vs%20the%20original%20Lua-every%20frame-008751?style=for-the-badge
-[flash-shield]: https://img.shields.io/badge/flash-45%2C448%20%2F%2050%2C432%20B-5f574f?style=for-the-badge
+[flash-shield]: https://img.shields.io/badge/flash-45%2C568%20%2F%2050%2C432%20B-5f574f?style=for-the-badge
 [ram-shield]: https://img.shields.io/badge/RAM-17%2C360%20%2F%2018%2C416%20B-5f574f?style=for-the-badge
 [chgame-url]: https://github.com/bateske/CHGame
 [cpp-shield]: https://img.shields.io/badge/C++-00599C?style=for-the-badge&logo=cplusplus&logoColor=white

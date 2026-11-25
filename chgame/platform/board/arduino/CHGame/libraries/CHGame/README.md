@@ -57,7 +57,8 @@ the same for that game):
 
 | What | Command |
 |---|---|
-| Release build + size | `chgame --sketch <dir> build` |
+| Release build + size (`<dir>/build/<board>/release`) | `chgame --sketch <dir> build` |
+| The same for another board than the newest | `chgame --board rev0 --sketch <dir> build` |
 | Debug build (protocol on) | `chgame --sketch <dir> build --debug` |
 | Upload | `chgame --sketch <dir> upload [--debug]` |
 | Run in the simulator | `chgame --sketch <dir> run <script.txt> <outdir>` |
@@ -70,6 +71,15 @@ screenshots every time. Builds use the copies of CHGfx and this library in
 `platform/board/arduino/CHGame/libraries`. The board package (0.3.0 on)
 carries the same copies, so a sketch in the Arduino IDE or a plain
 `arduino-cli compile` needs nothing else; with 0.2.4, pass `--library` for both.
+
+The library builds for both boards, CHGame Rev0 (`CHGame:ch32v:rev0`) and
+CHGame Rev1 (`CHGame:ch32v:rev1`, which Rev 1.5 uses too; board package
+0.4.0 on): `Input.cpp` and `Audio.cpp` take the buttons, the buzzer and
+the LED from the board macro the package defines (`ARDUINO_CHGAME_REV1`),
+and a sketch needs nothing board-specific. `chgame` builds for the newest
+board the installed package has unless `--board` (given before the
+command) or `$CHGAME_BOARD` names another, and `chgame check` builds for
+every board it has.
 
 ## The modules
 
@@ -84,7 +94,7 @@ include just the one it needs, e.g. `<chgame/Fmt.h>`.
 | `chgame/Mask.h` | Lettering and logos with an outline, a drop shadow and a gradient fill: `maskBegin`, `maskText35`, `maskBlit1`, `maskDraw`. A title in its cover's lettering (extrusion, ink outline and shadow, the house gold as a dithered gradient baked into its data): `maskTitle`, `titleArt`, with the arrays `tools/titleart.py` writes from the cover recipe. |
 | `chgame/Fx.h` | `fx::ease` (cubic, back, in-out, bounce), `isin`/`icos` (integer, 256 steps a turn), `rnd`/`rndRange`/`reseed` (presentation randomness, repeatable), and the screen shake. |
 | `chgame/Sizzle.h`, `Sizzle.inl` | The particle pool (`spawn`, `burst`, `fountain`; sparks, confetti, stars, dust, coins, rain, goo), the pop-up or drop-in banner (`banner`, `holdBanner`, `activeRows`) and the floating `+$15` texts (`floatText`). An implementation header: a game sets `SIZZLE_*` switches in its `src/fx/Fx.h` (pool size, kinds, banner style, floats or not) and includes the bodies once from its `src/fx/Fx.cpp`, so each game compiles only what it uses, under its own size pragma. Not part of `<CHGame.h>`; `Sizzle.h` lists the switches. |
-| `chgame/Audio.h` | `audio::`: effects as step tables (`AUDIO_STEPS`, `AUDIO_STEP(hz, endHz, ms)`, `AUDIO_EFFECT(steps, priority \| SOFT \| GLIDE)`), `sfx()` (optionally a few semitones up), `blip()`, `note()`, music from Playtune scores (`music()`, its voices rendered as an arpeggio or a lead line) or one-voice melodies (`melody()`), and the status LED. One effect at a time on the piezo; a higher priority wins. |
+| `chgame/Audio.h` | `audio::`: effects as step tables (`AUDIO_STEPS`, `AUDIO_STEP(hz, endHz, ms)`, `AUDIO_EFFECT(steps, priority \| SOFT \| GLIDE)`), `sfx()` (optionally a few semitones up), `blip()`, `note()`, music from Playtune scores (`music()`, its voices rendered as an arpeggio or a lead line) or one-voice melodies (`melody()`), and the status LED. One effect at a time on the speaker (Rev0's piezo, Rev1's buzzer); a higher priority wins. |
 | `chgame/Save.h` | `save::load(MAGIC, version, data)` / `save::store(...)`: a record of up to 244 bytes in flash, kept across power cycles and re-uploads, two pages in turn with a CRC. Every sketch needs its own magic (`save::magic("XXXX")`). |
 | `chgame/Fmt.h` | Numbers to text without printf: `fmtInt`, `fmtMoney`, `fmtCash`, `fmtShort`, `fmtTime`, `fmtStr`. |
 | `chgame/RamFunc.h` | `RAMFUNC(name)`: a function that runs from SRAM, about three times as fast as from flash (and costs its size in RAM). For per-pixel loops. |
@@ -95,7 +105,7 @@ include just the one it needs, e.g. `<chgame/Fmt.h>`.
 
 - **Flash is the budget.** The image may use 50,944 B; keep it at or under
   50,432 B to keep both save pages. `device.py build` prints both after every
-  build, and `python tools/check_size.py <dir>/build/release --top 30` says
+  build, and `python tools/check_size.py <dir>/build/<board>/release --top 30` says
   what fills it. Unused parts of the library cost nothing (link-time optimisation
   drops them).
 - **RAM is 18,416 B** for statics, plus a 2 KB stack. The framebuffer takes

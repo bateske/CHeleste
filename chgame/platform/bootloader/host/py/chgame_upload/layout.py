@@ -25,6 +25,12 @@ META_MAGIC = 0x4D474843        # "CHGM"
 META_VERSION = 1
 BOOT_MAGIC = 0x43484742        # "CHGB"
 
+# The system settings block: the metadata page's last 32 bytes, reserved, kept
+# by bootloader v4 and later across installs. A provisioning image leaves it
+# 0xFF (never written).
+SYS_SIZE = 32
+SYS_ADDR = META_ADDR + PAGE_SIZE - SYS_SIZE   # 0xF7E0
+
 ERASED = 0xFF
 
 
@@ -42,4 +48,6 @@ def as_dict() -> dict[str, int]:
         "CHGAME_META_MAGIC": META_MAGIC,
         "CHGAME_META_VERSION": META_VERSION,
         "CHGAME_BOOT_MAGIC": BOOT_MAGIC,
+        "CHGAME_SYS_SIZE": SYS_SIZE,
+        "CHGAME_SYS_ADDR": SYS_ADDR,
     }

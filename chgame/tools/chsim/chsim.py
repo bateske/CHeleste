@@ -142,6 +142,24 @@ def uses(sketch, inos, pattern):
     return any(rx.search(p.read_text(encoding="utf-8", errors="replace")) for p in files)
 
 
+def other_libraries(sketch, inos):
+    """The libraries of a sketch from another repository (paths.sketch_libraries())
+    that it includes, with the ones they depend on (library.properties'
+    depends=, among those)."""
+    libs = {p.name: p for p in paths.sketch_libraries(sketch)}
+    want = [n for n in libs if uses(sketch, inos, r'#\s*include\s*<' + re.escape(n) + r'\.h>')]
+    seen = []
+    while want:
+        n = want.pop()
+        if n in seen:
+            continue
+        seen.append(n)
+        for line in (libs[n] / "library.properties").read_text(encoding="utf-8").splitlines():
+            if line.startswith("depends="):
+                want += [d.strip() for d in line[8:].split(",") if d.strip() in libs]
+    return [libs[n] for n in sorted(seen)]
+
+
 def chsd_dir(sketch, inos):
     """CHSd's folder if the sketch includes it, else None: $CHSIM_CHSD, else
     this repository's copy, else the sketchbook's libraries/CHSd."""
@@ -229,6 +247,11 @@ def build(sketch, defines=(), out=None):
         chgame = chgame_dir()
         srcs += sorted(p for p in chgame.rglob("*") if p.suffix in (".cpp", ".c"))
         includes.append(chgame)
+    for lib in other_libraries(sketch, inos):
+        # A library of the sketch's own repository (CHPower's, say), with
+        # its own made-up hardware under CHSIM.
+        srcs += sorted(p for p in (lib / "src").rglob("*") if p.suffix in (".cpp", ".c"))
+        includes.append(lib / "src")
     chsd = chsd_dir(sketch, inos)
     if chsd:
         # The FAT reader as it is; SdSpi.cpp compiles to nothing under

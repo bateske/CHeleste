@@ -1,6 +1,7 @@
 """Build and run CHSd's host tests: src/Fat.cpp against FAT images made with
 tools/fatimg.py (whose layout is the ground truth), host/VCard.h, and
-src/SdSpi.cpp's init and read against a model of the card (test_spi.cpp).
+src/SdSpi.cpp's init and read against a model of the card (test_spi.cpp),
+built once per board (rev0, and rev1 with -DARDUINO_CHGAME_REV1).
 
     python tests/run_tests.py [--quick]
 
@@ -119,22 +120,26 @@ def main():
     ok = True
 
     target = spi_target(cxx)
-    if target:
-        spi = BUILD / "test_spi.exe"
-        r = subprocess.run(cxx + flags + ["-target", target, f"-I{HERE / 'spi'}", f"-I{ROOT / 'src'}",
-                                          str(HERE / "test_spi.cpp"), str(ROOT / "src" / "SdSpi.cpp"), "-o", str(spi)],
+    # Once per board: the card's chip select is PB11 on CHGame Rev0 and PB3 on
+    # Rev1 (ARDUINO_CHGAME_REV1, which the board package defines).
+    for board, defs in (("rev0", []), ("rev1", ["-DARDUINO_CHGAME_REV1"])):
+        if not target:
+            print(f"   skip SPI driver, {board} (needs zig for a 32-bit build)")
+            continue
+        spi = BUILD / ("test_spi.exe" if board == "rev0" else f"test_spi_{board}.exe")
+        r = subprocess.run(cxx + flags + defs + ["-target", target, f"-I{HERE / 'spi'}", f"-I{ROOT / 'src'}",
+                                                 str(HERE / "test_spi.cpp"), str(ROOT / "src" / "SdSpi.cpp"),
+                                                 "-o", str(spi)],
                            capture_output=True, text=True)
         if r.returncode:
             sys.stderr.write(r.stdout + r.stderr)
-            raise SystemExit("build failed (test_spi)")
+            raise SystemExit(f"build failed (test_spi, {board})")
         r = subprocess.run([str(spi)], capture_output=True, text=True)
         last = (r.stdout.strip().splitlines() or ["(no output)"])[-1]
-        print(f"   {'ok  ' if r.returncode == 0 else 'FAIL'} SPI driver against the card model: {last}")
+        print(f"   {'ok  ' if r.returncode == 0 else 'FAIL'} SPI driver against the card model, {board}: {last}")
         if r.returncode:
             print(r.stdout[-2000:] + r.stderr[-2000:])
             ok = False
-    else:
-        print("   skip SPI driver (needs zig for a 32-bit build)")
 
     def run(label, *args):
         nonlocal ok

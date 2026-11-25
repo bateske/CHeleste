@@ -48,7 +48,7 @@ PICO-8's `foreach` is copied exactly from zepto8's `all()`. Deleting the current
 ## Measured (simulator, `cl run tools/scripts/rooms.txt`, after `cal`)
 
 - **Render time:** estimated 13-19 ms on the board in every room, inside the 33 ms of a 30 fps frame. The odd single-frame max of 40-90 ms in a run was host jitter: it moves between runs.
-- **Release build:** flash 45,448 B of 50,432 (both save pages kept), static RAM 17,360 of 18,416 B.
+- **Release builds** (board package 0.4.1): Rev0 45,468 B, Rev1 45,568 B of 50,432 flash (both save pages kept); static RAM 17,360 / 17,352 of 18,416 B. `cl export` builds both into one cart (`rev0.bin`, `rev1.bin`); `cl build` alone builds the newest board (rev1), `--board rev0` the other.
 - **Debug build:** 48,260 B.
 - **Where the flash goes:**
   - the cart's sheet and map: 12 KB;

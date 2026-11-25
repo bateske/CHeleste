@@ -35,7 +35,8 @@ namespace sd {
 
 /// @brief Wakes the card and identifies it (SD v1, SDSC v2, SDHC/SDXC).
 ///
-/// Runs at 187.5 kHz with the card's CS (PB11) low, then sets 12 MHz for
+/// Runs at 187.5 kHz with the card's CS (PB11 on CHGame Rev0, PB3 on Rev1:
+/// `ARDUINO_CHGAME_REV1`, which the board package defines) low, then sets 12 MHz for
 /// `read()`. Takes up to about a second with a card that is slow to come
 /// ready; with no card it fails in about 15 ms (MISO is pulled up, so an
 /// empty slot reads 0xFF). Call it again after any failed read, or after

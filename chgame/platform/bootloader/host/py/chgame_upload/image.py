@@ -12,7 +12,7 @@ import struct
 import zlib
 
 from . import layout as L
-from .chg import TARGET_REV0
+from .chg import TARGET_REV0, board_name, target_of
 
 
 def check_boot_image(boot: bytes) -> None:
@@ -41,6 +41,22 @@ def boot_image_board(boot: bytes) -> int:
     rev0 bootloader (platform/board/docs/protocol.md)."""
     word = struct.unpack_from("<I", boot, BOARD_WORD_OFFSET)[0] if len(boot) >= BOARD_WORD_OFFSET + 4 else 0
     return word or TARGET_REV0
+
+
+def check_boot_board(boot: bytes, device: str | None) -> None:
+    """With `device`, the board the user picked (`-device`, the IDE's board),
+    refuse a bootloader image built for another: its board word names that
+    board. Checked before anything touches the board, by every path that
+    writes a bootloader (burn, provision, selfupdate). None checks nothing.
+    ValueError, as target_of() for a device this tool does not know. The
+    messages are the Go tool's."""
+    if not device:
+        return
+    want = target_of(device)
+    got = boot_image_board(boot)
+    if got != want:
+        raise ValueError(f"this bootloader is built for {board_name(got)}, not {board_name(want)}: "
+                         f"pick {device}'s bootloader (Tools > Board, then Tools > Bootloader)")
 
 
 def build_metadata(app: bytes, app_version: int = 0) -> bytes:

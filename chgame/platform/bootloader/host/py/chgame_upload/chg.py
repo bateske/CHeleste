@@ -29,10 +29,11 @@ TITLE_LEN, AUTHOR_LEN, VERSTR_LEN = 32, 16, 8
 # that name; later boards are "CGR<n>" (spec/chgame.md, "Devices and
 # revisions"). Never reused or reassigned.
 TARGET_REV0 = 0x35335843    # "CX35": CHGame Rev0 (CH32X035G8U6)
-TARGET_REV1 = 0x31524743    # "CGR1": reserved for CHGame Rev1, not yet defined
+TARGET_REV1 = 0x31524743    # "CGR1": CHGame Rev1 (and Rev 1.5, the same pins)
 TARGET_ID = TARGET_REV0     # what pack writes when no device is named
-DEVICES = {"rev0": TARGET_REV0}          # the boards this tool uploads and packs for
-RESERVED = {"rev1": TARGET_REV1}         # assigned, not defined yet: refused by name
+DEVICES = {"rev0": TARGET_REV0,          # the boards this tool uploads and packs for
+           "rev1": TARGET_REV1}
+RESERVED: dict = {}                      # assigned, not defined yet: refused by name (none at present)
 
 
 def fourcc(v: int) -> str:
@@ -42,11 +43,16 @@ def fourcc(v: int) -> str:
 
 
 def board_name(target: int) -> str:
-    """'rev0 (CX35)'; 'rev1 (CGR1)' for a reserved one; the id otherwise."""
+    """'rev0 (CX35)', 'rev1 (CGR1)', a reserved one's the same way; the id otherwise."""
     for name, t in list(DEVICES.items()) + list(RESERVED.items()):
         if t == target:
             return f"{name} ({fourcc(t)})"
     return f"unknown board 0x{target:08X} ({fourcc(target)})"
+
+
+def known_devices() -> str:
+    """The devices this tool knows, as its messages list them: "rev0, rev1"."""
+    return ", ".join(sorted(DEVICES))
 
 
 def target_of(device: str) -> int:
@@ -55,7 +61,7 @@ def target_of(device: str) -> int:
         return DEVICES[device]
     if device in RESERVED:
         raise ValueError(f"{device} is reserved for a board that is not defined yet")
-    raise ValueError(f"unknown device {device!r} (known: {', '.join(DEVICES)})")
+    raise ValueError(f'unknown device "{device}" (known: {known_devices()})')
 
 
 def _text(s: str, n: int, what: str) -> bytes:

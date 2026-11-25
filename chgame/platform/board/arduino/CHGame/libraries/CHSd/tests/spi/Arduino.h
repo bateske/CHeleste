@@ -21,17 +21,19 @@ struct SpiRegs {
     SpiData DATAR;
 };
 
-// BSHR sets pins, BCR clears them; OUTDR is the result.
+// BSHR sets pins, BCR clears them; OUTDR is the result. touched collects
+// every pin either has written, for the tests' check that the driver keeps
+// to its own pins.
 struct GpioRegs;
 struct GpioSet { GpioRegs *p; GpioSet &operator=(uint32_t v); };
 struct GpioClr { GpioRegs *p; GpioClr &operator=(uint32_t v); };
 struct GpioRegs {
-    uint32_t CFGLR = 0x44444444, CFGHR = 0x44444444, OUTDR = 0;
+    uint32_t CFGLR = 0x44444444, CFGHR = 0x44444444, OUTDR = 0, touched = 0;
     GpioSet BSHR{this};
     GpioClr BCR{this};
 };
-inline GpioSet &GpioSet::operator=(uint32_t v) { p->OUTDR |= v; return *this; }
-inline GpioClr &GpioClr::operator=(uint32_t v) { p->OUTDR &= ~v; return *this; }
+inline GpioSet &GpioSet::operator=(uint32_t v) { p->OUTDR |= v; p->touched |= v; return *this; }
+inline GpioClr &GpioClr::operator=(uint32_t v) { p->OUTDR &= ~v; p->touched |= v; return *this; }
 
 struct DmaChannel { uint32_t CFGR, CNTR, PADDR, MADDR; };
 struct DmaRegs { uint32_t INTFR, INTFCR; };

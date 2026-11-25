@@ -10,4 +10,4 @@ bootloader's hardware tests use this one.
     chgame uploader probe                         (the repository's entry point)
     chgame-upload probe                           (after `pip install -e platform/bootloader/host/py`)
 """
-__version__ = "0.2.0"       # the same number as `version` in ../go/main.go (test_cli.py checks)
+__version__ = "0.3.0"       # the same number as `version` in ../go/main.go (test_cli.py checks)

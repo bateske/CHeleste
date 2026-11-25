@@ -21,7 +21,13 @@ is in tools/gamecfg.py):
      the incremental redraw against a build that redraws everything.
   4. The game's simulator tests (SIM_TESTS: saving across a power cycle).
   5. The release build compiles for the device and fits (tools/check_size.py),
-     and prints what the game requires of it (BUILD_REQUIRE).
+     and prints what the game requires of it (BUILD_REQUIRE): for every board
+     the installed CHGame core has (tools/device.py; --board, or `chgame
+     --board B check`, for one), each reported on its own. A board the core
+     lacks is skipped, and said so; it is not a failure, unless it was asked
+     for by name (--board, $CHGAME_BOARD), or no board at all was built (no
+     arduino-cli, or no CHGame core): then it fails, as `chgame build` does.
+     Steps 0-4 run once: the simulator has no board.
 
 Screenshots, contact sheets and GIFs are left in out/<script>/ to look at.
 A section with nothing to do says `none`. Exit code 0 when everything
@@ -109,7 +115,8 @@ def card_env(cfg, ctx, script):
     return {"CHSD_CARD": str(path)}
 
 
-def check(game, quick=False, no_device=False):
+def check(game, quick=False, no_device=False, boards=None):
+    """boards: the boards to build for (default every one the installed core has)."""
     game = paths.sketch(game)
     cfg = gamecfg.load(game)
     ctx = Ctx(game, quick)
@@ -197,34 +204,73 @@ def check(game, quick=False, no_device=False):
             if r.returncode:
                 failed.append(f"simulator tests ({Path(script).name})")
 
+    results = {}                            # board -> "ok", "FAIL" or "skipped"
     if not no_device:
-        print("== device build (compile only)")
-        r = subprocess.run([sys.executable, str(TOOLS / "device.py"), "--sketch", str(game), "build"],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace")
-        out = (r.stdout + r.stderr).strip()
-        print("\n".join(out.splitlines()[-3:]))
-        if r.returncode:
-            failed.append("device build")
-        for need in cfg.BUILD_REQUIRE:
-            if need not in out:
-                print(f"  FAIL: the build must print {need!r}")
-                failed.append(f"device build ({need})")
+        import device
+        for board in boards or device.BOARDS:
+            if board not in device.for_boards(game):
+                print(f"== device build, {board}: skipped ({Path(game).name} is for "
+                      f"{', '.join(device.for_boards(game))} alone)")
+                results[board] = "skipped"
+                continue
+            if not device.installed(board):
+                if boards:                  # asked for by name: a failure, as `chgame build` stops
+                    print(f"== device build, {board}: FAIL: {device.not_installed(board)}")
+                    results[board] = "FAIL"
+                    failed.append(f"device build ({board}: not installed)")
+                else:
+                    print(f"== device build, {board}: skipped (the installed core has no {board})")
+                    results[board] = "skipped"
+                continue
+            print(f"== device build, {board} (compile only)")
+            r = subprocess.run([sys.executable, str(TOOLS / "device.py"), "--sketch", str(game), "--board", board,
+                                "build"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+            out = (r.stdout + r.stderr).strip()
+            print("\n".join(out.splitlines()[-3:]))
+            bad = bool(r.returncode)
+            if bad:
+                failed.append(f"device build ({board})")
+            for need in cfg.BUILD_REQUIRE:
+                if need not in out:
+                    print(f"  FAIL: the {board} build must print {need!r}")
+                    failed.append(f"device build ({board}: {need})")
+                    bad = True
+            results[board] = "FAIL" if bad else "ok"
+        if results:
+            print("device builds: " + ", ".join(f"{b} {v}" for b, v in results.items()))
+            broken = [b for b, v in results.items() if v == "FAIL"]
+            fine = [b for b, v in results.items() if v == "ok"]
+            if broken and fine and len(failed) == sum(f.startswith("device build (") for f in failed):
+                print(f"  only the {', '.join(broken)} build failed; {', '.join(fine)} and the rest passed")
+        if all(v == "skipped" for v in results.values()):
+            # Every board skipped: no arduino-cli, or no CHGame core. The size gate must not pass unbuilt.
+            print(f"  FAIL: no board was built: {device.not_installed(device.BOARDS[0])}")
+            failed.append("device build (no board built: are arduino-cli and the CHGame core installed?)")
 
     print("ALL GOOD" if not failed else "SOMETHING FAILED: " + "; ".join(failed))
     return 0 if not failed else 1
 
 
-def main(game=None, argv=None):
+def main(game=None, argv=None, boards=None):
+    """boards: the boards to build for (`chgame --board B check`); default
+    --board, else every one the installed core has."""
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     if game is None:
         ap.add_argument("game", help="the game's folder or name")
     ap.add_argument("--quick", action="store_true", help="the short host tests, and each script once")
     ap.add_argument("--no-device", action="store_true", help="skip the device compile")
+    ap.add_argument("--board", action="append", metavar="B",
+                    help="build for this board only (again for more; default every one the installed core has)")
     ap.add_argument("--compare", nargs=2, metavar=("A", "B"), help="compare two runs' images")
     a = ap.parse_args(argv)
     if a.compare:
         return compare(*a.compare)
-    return check(game or a.game, a.quick, a.no_device)
+    if a.board:
+        import device
+        bad = [b for b in a.board if b not in device.BOARDS]
+        if bad:
+            ap.error(f"--board {bad[0]}: not a board (the boards: {', '.join(device.BOARDS)})")
+    return check(game or a.game, a.quick, a.no_device, a.board or boards)
 
 
 if __name__ == "__main__":

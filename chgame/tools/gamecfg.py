@@ -56,9 +56,16 @@ Builds (`chgame build`, `upload`, `export`, `card`):
                                     saves without that, none switches saving
                                     off (tools/check_size.py)
 
-    FQBN = None                     the board and options to build with instead
-                                    of the release/debug defaults (device.py):
-                                    CHSDtoUSB needs USB Serial and -Os
+    FQBN = None                     the options to build with instead of the
+                                    release/debug defaults (device.py):
+                                    CHSDtoUSB needs USB Serial and -Os. Its
+                                    board field (write rev0) is replaced by
+                                    the board a build is for (--board, else
+                                    the newest installed: device.fqbn())
+    BOARDS = None                   the boards the sketch is for (None: every
+                                    one): ("rev1",) for a Rev 1.5 app. The
+                                    tools build, check, export and card it for
+                                    those alone; a build for another is refused
     DEFINES = []                    preprocessor defines the sketch always
                                     builds with, on the board (build.extra_flags)
                                     and in the simulator (-D): CHSDtoSerial's
@@ -87,6 +94,7 @@ DEFAULTS = {
     "SAVE_PAGES": 2,
     "FQBN": None,
     "DEFINES": [],
+    "BOARDS": None,
 }
 HOOKS = ("before_tests", "after_tests", "before_check", "after_host_tests")
 SPEC_DEFAULTS = {"opt": "-O2", "defines": ["CHTEST"], "includes": [], "cwd": None, "args": "pass",

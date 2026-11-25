@@ -1,8 +1,8 @@
 # Vendored from bateske/CHGame
 
 - Upstream: https://github.com/bateske/CHGame
-- Commit: `e1f8d05940ddb7bbef89c13326da75c003f02904` (2026-10-08T21:01:57-07:00)
-- Subject: Merge pull request #21 from joyrider3774/chsd-idle-clocks-before-command
+- Commit: `921c348faa4211caa20bfce504a5b15f014a2c47` (2026-11-24T16:32:32-08:00)
+- Subject: chgame-upload tool definition for v0.4.1
 
 A subset of the repository, with its relative layout kept so the shared
 tools (`tools/chgame.py`, `tools/chsim`, ...) find the libraries the way

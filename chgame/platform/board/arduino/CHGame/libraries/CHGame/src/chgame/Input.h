@@ -28,17 +28,19 @@
 /// @endcode
 ///
 /// The button names and the calls are the Arduboy2 library's, so code
-/// written for it reads the same here.
+/// written for it reads the same here. The pins in brackets are CHGame
+/// Rev0's, then Rev1's where they differ; a sketch sees the same masks on
+/// both boards.
 /// @{
 
-#define A_BUTTON      (1u << 0)     ///< The A button (PB1).
-#define B_BUTTON      (1u << 1)     ///< The B button (PB6).
-#define UP_BUTTON     (1u << 2)     ///< D-pad up (PB4).
-#define DOWN_BUTTON   (1u << 3)     ///< D-pad down (PC14).
-#define LEFT_BUTTON   (1u << 4)     ///< D-pad left (PB3).
-#define RIGHT_BUTTON  (1u << 5)     ///< D-pad right (PC15).
-#define START_BUTTON  (1u << 6)     ///< START (PB8). Held 3 s, it leaves for the menu (CHGame::startExits).
-#define SELECT_BUTTON (1u << 7)     ///< SELECT (PB7).
+#define A_BUTTON      (1u << 0)     ///< The A button (PB1; PB11 on Rev1).
+#define B_BUTTON      (1u << 1)     ///< The B button (PB6 on both boards).
+#define UP_BUTTON     (1u << 2)     ///< D-pad up (PB4; PB0 on Rev1).
+#define DOWN_BUTTON   (1u << 3)     ///< D-pad down (PC14; PB1 on Rev1).
+#define LEFT_BUTTON   (1u << 4)     ///< D-pad left (PB3; PC3 on Rev1).
+#define RIGHT_BUTTON  (1u << 5)     ///< D-pad right (PC15; PC0 on Rev1).
+#define START_BUTTON  (1u << 6)     ///< START (PB8 on both boards). Held 3 s, it leaves for the menu (CHGame::startExits).
+#define SELECT_BUTTON (1u << 7)     ///< SELECT (PB7 on both boards).
 
 /// @brief Read the buttons straight from the hardware.
 /// @return A mask of the buttons held right now (pressed = 1), `A_BUTTON` ...
@@ -52,7 +54,10 @@ uint8_t chgame_readButtons();
 /// @details A plain reset, with no boot request
 /// (platform/bootloader/shared/chgame_bootreq.h). Under a bootloader without
 /// the menu (0.2.4) the game simply starts again. In the simulator it prints
-/// a line and ends the run.
+/// a line and ends the run. First it calls `chgame_beforeExit()` if the
+/// sketch has one (a weak symbol; a library that drives hardware which must
+/// be off across a reset defines it: the add-on CHPower library turns the
+/// Rev 1.5's output and host power off), as the debug protocol's B does.
 [[noreturn]] void chgame_exitToMenu();
 
 /// @brief The board's buttons and frame clock. There is one, @ref ::chgame.

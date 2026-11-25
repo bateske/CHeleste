@@ -74,7 +74,7 @@
  * The macros here can be overridden with `-D` build flags. They are
  * compiled into the library's own files, so they have to be build flags
  * (`--build-property build.extra_flags=-DGFX_CHUNK_ROWS=4` with
- * `arduino-cli`), not `#define`s in the sketch. Two more switches are
+ * `arduino-cli`), not `#define`s in the sketch. Three more switches are
  * read only by the library's `.cpp` files:
  *
  * - `CHGFX_NO_SD_PARK`: do not drive the shared SD card's chip select
@@ -83,6 +83,15 @@
  * - `CHGFX_ISR_IN_SRAM`: run the DMA interrupt handler from SRAM. An
  *   async flush costs 4-9% less CPU (0.1-0.25 ms a full frame), for about
  *   330 bytes of SRAM.
+ * - `CHGFX_BL_PORT` / `CHGFX_BL_PIN`: a switched backlight, active high.
+ *   Unset by default (CHGame Rev0's backlight is always on); the CHGame
+ *   Rev1 board's variant sets PB9. With it, gfx_begin() holds the pin low
+ *   from the start, sends the framebuffer as a first frame at the end
+ *   (black until the sketch draws), and only then drives it high, so the
+ *   panel's power-up noise is never lit.
+ *
+ * A board variant may define the pin macros below (CHGame Rev1's does:
+ * LCD_DC on PB4, SD_CS on PB3); the defaults here are CHGame Rev0's.
  * @{
  */
 
@@ -153,6 +162,10 @@
  * Defaults are the CHGame board (see variant_CHGame_Rev0.h):
  *   PA4 = LCD_CS, PB0 = LCD_DC, PB12 = LCD_RST, PB11 = SD_CS
  * SD_CS is driven high at begin() because the microSD slot shares SPI1.
+ * A board variant that defines these first wins: CHGame Rev1's
+ * (variant_CHGame_Rev1.h) has PA4 = LCD_CS, PB4 = LCD_DC, PB12 = LCD_RST,
+ * PB3 = SD_CS, and the backlight, PB9, as CHGFX_BL_PORT / CHGFX_BL_PIN
+ * (which has no default: a board without one leaves it undefined).
  */
 #ifndef CHGFX_CS_PORT
 /**
@@ -288,7 +301,12 @@ void gfx__begin12(uint8_t spiDiv);
  * and wake-up delays). It parks the SD card's chip select high (unless
  * `CHGFX_NO_SD_PARK`), selects the colour mode and, in 12 bpp, programs
  * the panel's colour LUT (gfx_writeColorLut()). The framebuffer is not
- * touched and nothing is sent to the glass until the first flush.
+ * touched and nothing is sent to the glass until the first flush, except
+ * on a board with a switched backlight (`CHGFX_BL_PIN`, CHGame Rev1): there
+ * the backlight is held off throughout, the framebuffer is flushed once at
+ * the end (black, unless the sketch has drawn into it already; 8.2 ms in
+ * 12 bpp, and like any async flush it needs interrupts on), and then the
+ * backlight is turned on.
  *
  * gfx_begin() picks one of two starts. A sketch that names GFX_12BPP and
  * never calls gfx_setColorMode() gets the 12 bpp-only start, and the 16

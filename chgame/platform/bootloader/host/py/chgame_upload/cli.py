@@ -4,25 +4,29 @@
     chgame-upload [flags] info                  the bootloader's version and memory map
     chgame-upload [flags] touch                 1200-baud touch: reboot a sketch into the bootloader
     chgame-upload [flags] run                   tell the bootloader to launch the application
-    chgame-upload [flags] flash <file.bin> [-verify] [-run] [-device rev0]
-    chgame-upload [flags] selfupdate <boot.bin> [--yes]
-    chgame-upload [flags] provision -bootloader <boot.bin> [-app <app.bin>] [-wchisp <path>]
-    chgame-upload [flags] burn -method usb|isp -bootloader <boot.bin> [-app <app.bin>] [-wchisp <path>]
-    chgame-upload [flags] pack <file.bin> [-out <file.chg>] [-title T] [-author A] [-gameversion V] [-device rev0]
+    chgame-upload [flags] flash <file.bin> [-verify] [-run] [-device rev0|rev1]
+    chgame-upload [flags] selfupdate <boot.bin> [-device rev0|rev1] [--yes]
+    chgame-upload [flags] provision -bootloader <boot.bin> [-app <app.bin>] [-wchisp <path>] [-device rev0|rev1] [-yes]
+    chgame-upload [flags] burn -method usb|isp -bootloader <boot.bin> [-app <app.bin>] [-wchisp <path>] [-device rev0|rev1]
+    chgame-upload [flags] pack <file.bin> [-out <file.chg>] [-title T] [-author A] [-gameversion V] [-device rev0|rev1]
     chgame-upload [flags] noop
 
   flash       upload a sketch through the bootloader (what Upload does)
   selfupdate  replace the bootloader over USB, through the one installed
-  provision   write the bootloader through the chip's factory ISP (hold BOOT, power cycle)
+  provision   write the bootloader through the chip's factory ISP (hold BOOT, power cycle);
+              asks before erasing the chip unless -yes is given
   burn        what Arduino's Burn Bootloader and Upload Using Programmer run:
-              selfupdate (usb) or provision (isp), then the sketch if one is given
+              selfupdate (usb) or provision (isp, never asks), then the sketch if one is given
   pack        wrap a sketch image in a .chg package for the SD game menu (every
               build runs it, so Export Compiled Binary leaves one by the sketch)
 
--device names the board the image was built for (rev0; spec/chgame.md's
-device table): pack writes its target id, and flash refuses a board whose
-bootloader reports another. selfupdate and burn -method usb refuse a
-bootloader image built for another board than the one running.
+-device names the board the image was built for (rev0, rev1; spec/chgame.md's
+device table): pack writes its target id (rev0 when absent), and flash refuses
+a board whose bootloader reports another. On selfupdate, burn and provision it
+refuses a bootloader image built for another board, before the board is
+touched. selfupdate and burn -method usb also refuse a bootloader image built
+for another board than the one running. The factory ISP cannot see the board:
+provision prints the chip and the image's board, and the user checks them.
 
 Flags: -port PORT, -timeout 10 (seconds; 500ms, 1m), -debug, -verbose, -quiet.
 They may appear before or after the verb, and with one dash or two: the
@@ -41,7 +45,7 @@ from . import __version__
 from . import chg
 from .client import (Client, NoDevice, SeveralDevices, ensure_bootloader, find_ports, quick_hello,
                      resolve_port, upload_touch, wait_for_application, wait_for_bootloader)
-from .image import boot_image_board, check_boot_image
+from .image import boot_image_board, check_boot_board, check_boot_image
 from .protocol import MODE_NAMES, StatusError
 from . import layout as L
 from . import upload as up
@@ -98,11 +102,12 @@ def parse_args(argv=None):
     f.add_argument("image")
     f.add_argument("--verify", action="store_true", help="read the region back and compare, independently of the device CRC")
     f.add_argument("--run", action="store_true", help="launch the application afterwards")
-    f.add_argument("--device", help="the board the image is built for (rev0): refuse any other board")
+    f.add_argument("--device", help="the board the image is built for (rev0, rev1): refuse any other board")
 
     s = sub.add_parser("selfupdate", parents=[common], help="replace the bootloader itself, over USB")
     s.add_argument("image")
     s.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    s.add_argument("--device", help="the board picked (rev0, rev1): refuse a bootloader built for another")
 
     k = sub.add_parser("pack", parents=[common], help="wrap a sketch image in a .chg package for the SD game menu")
     k.add_argument("image")
@@ -110,7 +115,7 @@ def parse_args(argv=None):
     k.add_argument("--title", help="what the menu shows (default: the sketch's name in capitals)")
     k.add_argument("--author", default="")
     k.add_argument("--gameversion", default="", help="a short version string, e.g. 1.2")
-    k.add_argument("--device", default="rev0", help="the board the image is built for (default rev0)")
+    k.add_argument("--device", default="rev0", help="the board the image is built for (rev0, rev1; default rev0)")
 
     for name, help_ in (("provision", "first flash / recovery through the factory ISP (needs BOOT)"),
                         ("burn", "what Burn Bootloader runs: selfupdate (usb) or provision (isp), then the sketch")):
@@ -118,6 +123,9 @@ def parse_args(argv=None):
         p.add_argument("--bootloader", required=True)
         p.add_argument("--app", help="write (burn: upload) a sketch too")
         p.add_argument("--wchisp", help="path to wchisp (else CHGAME_WCHISP or PATH)")
+        p.add_argument("--device", help="the board picked (rev0, rev1): refuse a bootloader built for another")
+        p.add_argument("--yes", action="store_true",
+                       help="erase and write without asking" if name == "provision" else "accepted; burn never asks")
         if name == "burn":
             p.add_argument("--method", default="usb", help="usb (through the installed bootloader) or isp (factory ISP)")
     return ap.parse_args(normalise(list(sys.argv[1:] if argv is None else argv)))
@@ -199,8 +207,10 @@ def do_selfupdate(a, boot_path: str, app_path: str | None, interactive: bool) ->
     doSelfUpdate step for step."""
     boot_path = pathlib.Path(boot_path)
     boot = boot_path.read_bytes()
+    device = getattr(a, "device", None)
     try:
         check_boot_image(boot)
+        check_boot_board(boot, device)
     except ValueError as e:
         raise SystemExit(f"{boot_path}: {e}")
     if app_path and not pathlib.Path(app_path).is_file():
@@ -223,7 +233,7 @@ def do_selfupdate(a, boot_path: str, app_path: str | None, interactive: bool) ->
         h = c.hello()
         print(f"port        : {boot_port}")
         print(f"installed   : bootloader v{h.boot_version}")
-        print(f"bootloader  : {boot_path.name}  ({len(boot)} bytes)")
+        print(f"bootloader  : {boot_path.name}  ({len(boot)} bytes, for {chg.board_name(boot_image_board(boot))})")
         if h.app_start != L.APP_START:
             raise SystemExit(f"this board reserves 0x{h.app_start:04X} bytes for its bootloader, not "
                              f"0x{L.APP_START:04X}: the image does not belong on it")
@@ -254,7 +264,7 @@ def do_selfupdate(a, boot_path: str, app_path: str | None, interactive: bool) ->
         print("              menu bootloader, start a game from the card)")
         return 0
     up.flash_file(app_path, port=new_port, run=True, verify=False, timeout=a.timeout,
-                  progress=None if a.quiet else _bar, debug=a.debug)
+                  progress=None if a.quiet else _bar, debug=a.debug, device=device)
     return 0
 
 
@@ -262,13 +272,28 @@ def cmd_selfupdate(a) -> int:
     return do_selfupdate(a, a.image, None, interactive=True)
 
 
-def cmd_provision(a) -> int:
+def confirm(prompt: str) -> bool:
+    """Asks on the terminal; anything but y or yes, or no answer at all (stdin
+    closed or empty), is no."""
+    try:
+        return input(prompt).strip().lower() in ("y", "yes")
+    except EOFError:
+        print()
+        return False
+
+
+def _provision(a, ask) -> int:
     """Write the bootloader (and optionally a sketch) through the factory ISP."""
     try:
-        provision(pathlib.Path(a.bootloader), pathlib.Path(a.app) if a.app else None, wchisp=a.wchisp)
+        provision(pathlib.Path(a.bootloader), pathlib.Path(a.app) if a.app else None, wchisp=a.wchisp,
+                  device=a.device, ask=ask)
     except (WchispNotFound, RuntimeError) as e:
         raise SystemExit(str(e))
     return 0
+
+
+def cmd_provision(a) -> int:
+    return _provision(a, None if a.yes else confirm)
 
 
 def cmd_pack(a) -> int:
@@ -286,7 +311,7 @@ def cmd_burn(a) -> int:
         a.yes = True
         return do_selfupdate(a, a.bootloader, a.app, interactive=False)
     if a.method == "isp":
-        return cmd_provision(a)
+        return _provision(a, None)          # Burn Bootloader, Upload Using Programmer: never asks
     raise SystemExit(f'unknown method "{a.method}" (usb or isp)')
 
 

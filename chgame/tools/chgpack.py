@@ -11,7 +11,7 @@ that follows the picture rule, spec/card.md, or a .PIC file). The ones
 `chgame cart prepare` writes also carry the game's record (spec/chg.md): what
 a backup of the card needs to make the game's cart again.
 
-    python tools/chgpack.py pack build/release/CHFour.ino.bin FOURROW.CHG --title "FOUR IN A ROW" [--image cart.png]
+    python tools/chgpack.py pack build/rev0/release/CHFour.ino.bin FOURROW.CHG --title "FOUR IN A ROW" [--image cart.png]
                                                  (or the build's CHFour.ino.elf / .hex; --device rev0 is the default)
     python tools/chgpack.py verify FOURROW.CHG [more.CHG ...]
     python tools/chgpack.py info E:\\              # a mounted card (or any folder)
@@ -39,14 +39,16 @@ APP_MAX_SIZE = 50944        # CHGAME_APP_MAX_SIZE
 # Board target ids (chg_format.h CHG_TARGET_*): rev0's is named after its MCU
 # and keeps that name; later boards are "CGR<n>". Never reused or reassigned.
 TARGET_REV0 = 0x35335843    # "CX35": CHGame Rev0 (CH32X035G8U6)
-TARGET_REV1 = 0x31524743    # "CGR1": reserved for CHGame Rev1, not yet defined
+TARGET_REV1 = 0x31524743    # "CGR1": CHGame Rev1 (and Rev1.5, the same pins)
 TARGET_ID = TARGET_REV0     # the board a package is for when none is named
 # The boards these tools make and read packages for: target id -> (device,
 # layout id, largest payload). A board joins when spec/chgame.md's device
 # table defines it, with chcart.model.DEVICES (chcart's tests check they agree).
-BOARDS = {TARGET_REV0: ("rev0", LAYOUT_ID, APP_MAX_SIZE)}
+BOARDS = {TARGET_REV0: ("rev0", LAYOUT_ID, APP_MAX_SIZE),
+          TARGET_REV1: ("rev1", LAYOUT_ID, APP_MAX_SIZE)}
 # Ids assigned to boards that are not defined yet: refused, but by name.
-RESERVED = {TARGET_REV1: "rev1"}
+# None at present.
+RESERVED: dict = {}
 BOOT_SIG = 0x4C424843       # "CHBL" at payload offset 8 marks a bootloader image
 TITLE_LEN, AUTHOR_LEN, VERSTR_LEN = 32, 16, 8
 IMAGE_OFF = 0x060           # CHG_OFF_IMAGE: offset, bytes, CRC-32 of the game's picture

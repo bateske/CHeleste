@@ -16,8 +16,10 @@ static inline void plot(uint8_t *p, int x, uint8_t c) {
 // ---------------------------------------------------------------------------
 // Shapes
 // ---------------------------------------------------------------------------
-// Corner insets per row for radius 1..4 (pixel-art circles, not chamfers).
-static const uint8_t INSET[4][4] = { {1}, {2, 1}, {3, 1, 1}, {4, 2, 1, 1} };
+// Corner insets per row for radius 1..4: each a clean diagonal, one pixel a
+// row (the owner's choice, 2026-10-20: the arcs {3, 1, 1} and {4, 2, 1, 1}
+// left a doubled pixel on the second row).
+static const uint8_t INSET[4][4] = { {1}, {2, 1}, {3, 2, 1}, {4, 3, 2, 1} };
 
 void fillRound(int x, int y, int w, int h, uint8_t r, uint8_t c) {
     if (r > 4) r = 4;

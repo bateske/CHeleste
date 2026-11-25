@@ -14,6 +14,7 @@ void CDC_flush(void);
 uint8_t CDC_enumerated(void);
 uint8_t CDC_dtr(void);
 void chgame_enter_bootloader(void);
+void chgame_beforeExit(void) __attribute__((weak));    // (Input.cpp)
 }
 #else
 void sim_out(const uint8_t *p, uint32_t n);
@@ -272,6 +273,7 @@ static void execute() {
 #endif
 #ifndef CHSIM
         case 'B':
+            if (chgame_beforeExit) chgame_beforeExit();
             chgame_enter_bootloader();
             break;
 #endif

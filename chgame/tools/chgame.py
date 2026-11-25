@@ -1,6 +1,6 @@
 """chgame: the one entry point for the CHGame tools.
 
-    chgame [--sketch NAME|DIR] <command> [args]
+    chgame [--sketch NAME|DIR] [--board rev0|rev1] <command> [args]
 
 From inside a game's folder (or any folder below it) the sketch is found by
 itself; from anywhere else pass --sketch with a game's or app's name
@@ -8,7 +8,19 @@ itself; from anywhere else pass --sketch with a game's or app's name
 repository root makes the `chgame` command; `python tools/chgame.py` is the
 same thing uninstalled.
 
+--board (or $CHGAME_BOARD) is the board to build for, given before the
+command. Without it, build, upload, run --device and size take the newest
+board the installed CHGame core has (tools/device.py), and check, export and
+card take every board it has (a board it lacks is skipped, and said so);
+with it, only that board. Given, it is also the --device of cart
+prepare|flash|deploy|backup|new|add|build, pack pack and uploader
+flash|pack, unless the command has its own --device. Not given, a binary in
+a build/<board>/ folder names its board for cart new|add, pack pack and
+uploader flash|pack (a raw image carries none); one from another board's
+build folder than the board named is refused.
+
   build   [--debug] [-D FLAG ...]        compile for the board (release by default), print the size
+                                         (into build/<board>/release, or debug)
   upload  [--debug] [--port P] [--arduino]
                                          compile and flash through the Python uploader
                                          (--arduino: through arduino-cli and the Go tool instead)
@@ -20,25 +32,30 @@ same thing uninstalled.
                                          with --device, as a debug build on the board
   shot    OUT.png [--port P]             screenshot of the debug build running on the board
   check   [--quick] [--no-device] [--compare A B]
-                                         everything checkable without a board
+                                         everything checkable without a board (the device build:
+                                         every installed board's)
   test    [ARGS ...]                     the host unit tests (--sketch CHGfx: the graphics library's)
   redraw  SCRIPT OUTDIR [TICKS]          the incremental-redraw check against a full redraw
   gif     [--check] [--no-run] [--every N] [--hold MS]
                                          record the README's docs/gameplay.gif (--check: all games)
   size    [BUILDDIR] [--top N] [--symbols]
-                                         flash and RAM report of a build (default build/release)
+                                         flash and RAM report of a build (default build/<board>/release)
   audio   OUTDIR [--only NAME ...]       the sound effects and songs as WAV, with a hash each
-  export  [--no-build] [--out F]         the sketch as a .chgame (build/<Name>.chgame): to share it
+  export  [--no-build] [--out F] [--device B]
+                                         the sketch as a .chgame (build/<Name>.chgame): to share it,
+                                         with a binary per installed board
   cart    ...                            .chgame files: info, verify, new, build, add, remove, order,
                                          set, launch, background, picture, art, prepare, flash, deploy
                                          (tools/chcart)
-  card    ...                            the repository's casino cart and its SD card (tools/sdcard/mkcard.py)
+  card    ...                            the repository's casino cart and its SD card, one per board:
+                                         out/sdcard-<board>/ (tools/sdcard/mkcard.py)
   background IMAGE [--preview F] [--out F] [--card DIR] | --template F
                                          the list menu's picture: convert, preview, put on a card (docs/menu-image.md)
   picture IMAGE [--preview F] [--out F] [--card DIR] | --template F
                                          a picture for the visual menu: a game's, a cover (docs/visual-menu.md)
   boxart  [--check] [--sheet F]          draw the sketch's docs/cart.png from its tools/cart.py
                                          (--check: every program's is up to date)
+  boxart  --export DIR | --import DIR    every program's picture into one folder to edit, and back
   uploader ARGS ...                      the uploader itself: probe, info, flash, selfupdate, burn ...
   pack    ...                            CHG files, the menu's install files (tools/chgpack.py)
 
@@ -91,15 +108,80 @@ def game_tool(sketch, *rel):
     return p if p.exists() else None
 
 
+def board_of(a):
+    """The one board a command builds for: --board (or $CHGAME_BOARD), else
+    the newest the installed core has (tools/device.py)."""
+    import device
+    return a.board or device.default_board()
+
+
+def boards_of(a):
+    """The boards a command that takes several (check, export, card) is
+    limited to: [--board], or None for every board the installed core has."""
+    return [a.board] if a.board else None
+
+
+def device_arg(rest):
+    """The value of rest's own --device (or the uploader's -device), "" when
+    it has no value, None when there is none."""
+    for i, r in enumerate(rest):
+        if r in ("--device", "-device"):
+            return rest[i + 1] if i + 1 < len(rest) else ""
+        if r.startswith(("--device=", "-device=")):
+            return r.split("=", 1)[1]
+    return None
+
+
+def built_for(rest):
+    """The boards whose build folders (.../build/<board>/...) rest's paths are in."""
+    import device
+    found = set()
+    for r in rest:
+        parts = Path(r).parts
+        found |= {b for x, b in zip(parts, parts[1:]) if x == "build" and b in device.BOARDS}
+    return found
+
+
+def with_device(rest, verbs, board, infer=False):
+    """rest, plus --device BOARD when a board was named (--board,
+    $CHGAME_BOARD), its verb is one of `verbs`, and it has no --device of
+    its own (or the uploader's -device). infer, for the commands that take a
+    built binary (a raw image carries no board): with no board named, a
+    binary in build/<board>/ names it; one in another board's build folder
+    than the board named is refused, rather than labelled with the wrong board."""
+    if not any(r in verbs for r in rest):
+        return rest
+    own = device_arg(rest)
+    seen = built_for(rest) if infer else set()
+    named = own if own is not None else board
+    if named:
+        wrong = sorted(seen - {named})
+        if wrong:
+            fix = f"--device {wrong[0]}" if own is not None else f"chgame --board {wrong[0]} ..."
+            raise SystemExit(f"the binary in build/{wrong[0]}/ was built for {wrong[0]}, not {named}: "
+                             f"name its board ({fix}), or pass {named}'s build")
+    elif len(seen) > 1:
+        raise SystemExit(f"binaries built for {' and '.join(sorted(seen))} (build/<board>/): "
+                         "one board per command, named with chgame --board B")
+    if own is not None:
+        return rest
+    b = board or next(iter(seen), None)
+    if not b:
+        return rest
+    if not board:
+        print(f"(--device {b}: the binary is in build/{b}/)", file=sys.stderr)
+    return [*rest, "--device", b]
+
+
 def cmd_build(a, sketch):
     import device
-    device.build(sketch, a.debug, " ".join(a.D))
+    device.build(sketch, a.debug, " ".join(a.D), board=a.target)
     return 0
 
 
 def cmd_upload(a, sketch):
     import device
-    device.upload(sketch, device.build(sketch, a.debug), a.port, arduino=a.arduino)
+    device.upload(sketch, device.build(sketch, a.debug, board=a.target), a.port, arduino=a.arduino, board=a.target)
     return 0
 
 
@@ -114,7 +196,8 @@ def cmd_sim(a, sketch):
 def cmd_run(a, sketch):
     if a.device:
         import device
-        return device.run(sketch, where(sketch, a.script, must_exist=True), where(sketch, a.outdir), a.port)
+        return device.run(sketch, where(sketch, a.script, must_exist=True), where(sketch, a.outdir), a.port,
+                          board=a.target)
     drv = game_tool(sketch, "chsim", "chdrive.py") or TOOLS / "chsim" / "chdrive.py"
     env = dict(os.environ)
     env.pop("CHSD_CARD", None)
@@ -137,7 +220,7 @@ def cmd_check(a, sketch):
     if "--compare" in rest:
         i = rest.index("--compare")
         rest[i + 1:i + 3] = [str(where(sketch, p, must_exist=True)) for p in rest[i + 1:i + 3]]
-    return check.main(sketch, rest)
+    return check.main(sketch, rest, boards=boards_of(a))
 
 
 def cmd_test(a, sketch):
@@ -168,7 +251,11 @@ def cmd_gif(a, sketch):
 def cmd_size(a, sketch):
     import check_size
     rest = list(a.rest)
-    build = rest.pop(0) if rest and not rest[0].startswith("-") else str(sketch / "build" / "release")
+    if rest and not rest[0].startswith("-"):
+        build = rest.pop(0)
+    else:
+        import device
+        build = str(device.build_dir(sketch, False, a.target))
     return check_size.main([build, *rest])
 
 
@@ -179,12 +266,12 @@ def cmd_audio(a, sketch):
 
 def cmd_uploader(a, _sketch):
     from chgame_upload.cli import main as uploader_main
-    return uploader_main(list(a.rest))
+    return uploader_main(with_device(list(a.rest), {"flash", "pack"}, a.board, infer=True))
 
 
 def cmd_export(a, sketch):
     from chcart import cli
-    return cli.export_main(list(a.rest), sketch)
+    return cli.export_main(list(a.rest), sketch, boards=boards_of(a))
 
 
 def cmd_background(a, _sketch):
@@ -204,23 +291,40 @@ def cmd_boxart(a, sketch):
 
 def cmd_cart(a, _sketch):
     from chcart import cli
-    return cli.main(list(a.rest))
+    rest = list(a.rest)
+    if rest and rest[0] in {"prepare", "flash", "deploy", "backup", "new", "add", "build"}:
+        board = a.board
+        if not board and rest[0] in {"prepare", "flash", "deploy"} and device_arg(rest) is None:
+            # A card or a board is for one board: the newest by default, as
+            # for every other command (CLAUDE.md rule 9), not chcart's rev0.
+            import device
+            board = device.default_board()
+            print(f"(--device {board}: the default board; chgame --board B for another)", file=sys.stderr)
+        rest = with_device(rest, {rest[0]}, board, infer=rest[0] in {"new", "add"})
+    return cli.main(rest)
 
 
 def cmd_pack(a, _sketch):
     import chgpack
-    return chgpack.main(list(a.rest))
+    rest = list(a.rest)
+    if rest and rest[0] == "pack":
+        rest = with_device(rest, {"pack"}, a.board, infer=True)
+    return chgpack.main(rest)
 
 
 def cmd_card(a, _sketch):
     from sdcard import mkcard
-    return mkcard.main(list(a.rest))
+    return mkcard.main(list(a.rest), boards=boards_of(a))
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="chgame", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--sketch", help="a game's or app's name (CHFour, CHSDtoUSB, Hello) or folder")
+    import device
+    ap.add_argument("--board", choices=device.BOARDS, default=os.environ.get("CHGAME_BOARD") or None,
+                    help="the board to build for ($CHGAME_BOARD; default: the newest the installed core has, "
+                         "or for check, export and card every one it has)")
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
 
     p = sub.add_parser("build", help="compile for the board and print the size")
@@ -276,11 +380,18 @@ def main(argv=None):
     a.rest = rest
     if rest and a.cmd in {"build", "upload", "sim", "run", "shot"}:
         ap.error(f"unrecognized arguments: {' '.join(rest)}")
+    if a.board is not None and a.board not in device.BOARDS:
+        ap.error(f"CHGAME_BOARD={a.board}: not a board (the boards: {', '.join(device.BOARDS)})")
+    # The one board a building command is for (None for the rest).
+    a.target = None
+    if (a.cmd in {"build", "upload"} or (a.cmd == "run" and a.device)
+            or (a.cmd == "size" and not (a.rest and not a.rest[0].startswith("-")))):
+        a.target = board_of(a)
     sketch = None
     if a.cmd in NEEDS_SKETCH or (a.cmd in ("gif", "boxart") and not a.check
-                                 and not (a.cmd == "boxart" and "--sheet" in a.rest)):
+                                 and not (a.cmd == "boxart" and {"--sheet", "--export", "--import"} & set(a.rest))):
         sketch = sketch_of(a)
-        print(f"{sketch.name}: {a.cmd}", flush=True)
+        print(f"{sketch.name}: {a.cmd}" + (f" ({a.target})" if a.target else ""), flush=True)
     fn = globals()[f"cmd_{a.cmd}"]
     rc = fn(a, sketch)
     return int(rc or 0)
